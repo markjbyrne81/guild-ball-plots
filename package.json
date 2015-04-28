@@ -1,0 +1,29 @@
+{
+  "name": "tguild-ball-plots",
+  "description": "A Twitter bot that will reply with a random list of Guild Ball plots when mentioned in a tweet.",
+  "version": "0.0.1",
+  "homepage": "https://github.com/markjbyrne81/guild-ball-plots",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/markjbyrne81/guild-ball-plots.git"
+  },
+  "bugs": {
+    "url": "https://github.com/markjbyrne81/guild-ball-plots/issues"
+  },
+  "dependencies": {
+    "tuiter": "~0.2.12",
+    "express": "~4.9.0"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {},
+  "engines": {
+    "node": "0.8.x",
+    "npm": "1.1.x"
+  },
+  "author": {
+    "name": "Mark Byrne",
+    "email": "markjbyrne81@gmail.com"
+  },
+  "license": "MIT"
+}
