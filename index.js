@@ -5,7 +5,6 @@ app.get('/', function(req, res){ res.send('The Guild Ball Plots bot is running.'
 app.listen(process.env.PORT || 5000);
 // END HEROKU SETUP
 
-
 // config
 //
 // Config.keys uses environment variables so sensitive info is not in the repo.
@@ -53,67 +52,83 @@ var seasonOnePlots = [
     'Protect Your Balls'
 ];
 
-function getPlots() {
+/**
+ * For each player in the players array randomly select 5 unique
+ * plots from the seasonOnePlots array.  Then add the player and
+ * their plots to the returned object.
+ */
+function getPlots(players) {
 
     // clone the plots array
     var plotsCpy = _.clone(seasonOnePlots);
-    var plotText = ' Plots: ';
+    var playersPlots = {};
     var idx = 0;
     var i = 0;
+    var j = 0;
 
     do {
-        // get a random index for the plots array
-        idx = Math.floor((Math.random() * plotsCpy.length));
+        var plotText = ' Plots: ';
+        i = 0;
 
-        // add the plot to the returned string
-        plotText = plotText + plotsCpy[idx];
-        if (i < 4) {
-            plotText = plotText + ', ';
+        do {
+            // get a random index for the plots array
+            idx = Math.floor((Math.random() * plotsCpy.length));
+
+            // add the plot to the returned string
+            plotText = plotText + plotsCpy[idx];
+            if (i < 4) {
+                plotText = plotText + ', ';
+            }
+            
+            // log the selection of the plot
+            plotLog[plotsCpy[idx]]++;
+
+            // remove the plot we have just added
+            plotsCpy.splice(idx, 1);
+
+            i++;
         }
-        
-        // log the selection of the plot
-        plotLog[plotsCpy[idx]]++;
+        while (i < 5);
 
-        // remove the plot we have just added
-        plotsCpy.splice(idx, 1);
-
-        i++;
+        playersPlots[players[j]] = plotText;
+        j++;
     }
-    while (i < 5);
+    while (j < players.length);
 
-    return plotText;
+    return playersPlots;
 }
 
-function getTweetText(player) {
-    return '@' + player + getPlots();
-}
-
+// Print the plot log to see whats been going on
 function printPlotLog() {
     console.log(JSON.stringify(plotLog, null, 4));
 }
 
+/**
+ * Check if a second player was mentioned in the tweet.
+ * If so, add them to the players array and get the 
+ * plots.  Finally, send a tweet to each player in the
+ * players array to let them know what their plots are.
+ */
 function reply(tweet) {
-    
-    twitter.post('statuses/update', {
-        status: getTweetText(tweet.user.screen_name),
-        in_reply_to_status_id: tweet.id_str
-    }, onTweet);
 
-    var firstMentioned;
+    var players = [tweet.user.screen_name];
 
     _.find(tweet.entities.user_mentions, function(user) {
         if (user.screen_name !== config.me) {
-            firstMentioned = user.screen_name;
+            players.push(user.screen_name);
         }
     });
 
-    if (firstMentioned !== undefined) {
-        twitter.post('statuses/update', {
-            status: getTweetText(firstMentioned)
-        }, onTweet);
-    }
+    var playerPlots = getPlots(players);
 
-    printPlotLog();
+    for (var player in playerPlots) {
+        if (playerPlots.hasOwnProperty(player)) {
+            twitter.post('statuses/update', {
+                status: '@' + player + playerPlots[player],
+                in_reply_to_status_id: tweet.id_str
+            }, onTweet);
+        }
+    }
 }
 
 // What to do after we retweet something.
@@ -137,6 +152,7 @@ function triageTweet(tweet) {
     else {
         // Send a tweet to the person that requested the plots
         reply(tweet);
+        printPlotLog();
     }
 }
 
