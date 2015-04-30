@@ -84,17 +84,8 @@ function getPlots() {
     return plotText;
 }
 
-function getTweetText(player1, player2) {
-    var response = atUser(player1) + getPlots();
-
-    if(player2 !== undefined) {
-        response = response + '. Opponent: ' + atUser(player2);
-    }
-    return response;
-}
-
-function atUser(user) {
-    return '@' + user;
+function getTweetText(player) {
+    return '@' + player + getPlots();
 }
 
 function printPlotLog() {
@@ -102,6 +93,11 @@ function printPlotLog() {
 }
 
 function reply(tweet) {
+    
+    twitter.post('statuses/update', {
+        status: getTweetText(tweet.user.screen_name),
+        in_reply_to_status_id: tweet.id_str
+    }, onTweet);
 
     var firstMentioned;
 
@@ -110,15 +106,10 @@ function reply(tweet) {
             firstMentioned = user.screen_name;
         }
     });
-    
-    twitter.post('statuses/update', {
-        status: getTweetText(tweet.user.screen_name, firstMentioned),
-        in_reply_to_status_id: tweet.id_str
-    }, onTweet);
 
     if (firstMentioned !== undefined) {
         twitter.post('statuses/update', {
-            status: getTweetText(firstMentioned, tweet.user.screen_name)
+            status: getTweetText(firstMentioned)
         }, onTweet);
     }
 
