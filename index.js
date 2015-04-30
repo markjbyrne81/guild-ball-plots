@@ -10,10 +10,7 @@ app.listen(process.env.PORT || 5000);
 //
 // Config.keys uses environment variables so sensitive info is not in the repo.
 var config = {
-    me: 'GuildBallPlots', // The authorized account with a list to retweet.
-    regexFilter: '', // Accept only tweets matching this regex pattern.
-    regexReject: '(RT|@)', // AND reject any tweets matching this regex pattern.
-
+    me: 'GuildBallPlots', // The authorized account with a list to retweet
     keys: {
         consumer_key: process.env.TWITTER_CONSUMER_KEY,
         consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
@@ -22,96 +19,153 @@ var config = {
     },
 };
 
+// A hash containg the season 1 plots and a count of
+// how many times each has been selected. since last
+// restart
+var plotLog = {
+    'Vengeance': 0,
+    'Man Marking': 0,
+    'Make A Game Of It!': 0,
+    'Knee Slider!': 0,
+    'Miraculous Recovery': 0,
+    'Keep Ball': 0,
+    'Man Down': 0,
+    'Sideline Repairs': 0,
+    'Dont Touch The Hair!': 0,
+    'Second Wind': 0,
+    'Who Are Ya?': 0,
+    'Protect Your Balls': 0
+};
+
 // A hash containg the season 1 plots
-var seasonOnePlots = {
-    1: 'Vengeance',
-    2: 'Man Marking',
-    3: 'Make A Game Of It!',
-    4: 'Knee Slider!',
-    5: 'Miraculous Recovery',
-    6: 'Keep Ball',
-    7: 'Man Down',
-    8: 'Sideline Repairs',
-    9: 'Dont Touch The Hair!',
-    10: 'Second Wind',
-    11: 'Who Are Ya?',
-    12: 'Protect Your Balls'
-};
+var seasonOnePlots = [
+    'Vengeance',
+    'Man Marking',
+    'Make A Game Of It!',
+    'Knee Slider!',
+    'Miraculous Recovery',
+    'Keep Ball',
+    'Man Down',
+    'Sideline Repairs',
+    'Dont Touch The Hair!',
+    'Second Wind',
+    'Who Are Ya?',
+    'Protect Your Balls'
+];
 
-// A hash containing all plots.  Should make expanding to season 2 a little easier.  
-var plots = {
-    'season1': seasonOnePlots
-};
+function getPlots() {
 
-// Get the members of our list, and pass them into a callback function.
-function getListMembers(callback) {
-    var memberIDs = [];
+    // clone the plots array
+    var plotsCpy = _.clone(seasonOnePlots);
+    var plotText = ' Plots: ';
+    var idx = 0;
+    var i = 0;
 
-    tu.listMembers({owner_screen_name: config.me,
-        slug: config.myList
-    },
-    function(error, data){
-        if (!error) {
-            for (var i=0; i < data.users.length; i++) {
-                memberIDs.push(data.users[i].id_str);
-            }
+    do {
+        // get a random index for the plots array
+        idx = Math.floor((Math.random() * plotsCpy.length));
 
-            // This callback is designed to run listen(memberIDs).
-            callback(memberIDs);
-        } else {
-            console.log(error);
-            console.log(data);
+        // add the plot to the returned string
+        plotText = plotText + plotsCpy[idx];
+        if (i < 4) {
+            plotText = plotText + ', ';
+        }
+        
+        // log the selection of the plot
+        plotLog[plotsCpy[idx]]++;
+
+        // remove the plot we have just added
+        plotsCpy.splice(idx, 1);
+
+        i++;
+    }
+    while (i < 5);
+
+    return plotText;
+}
+
+function getTweetText(player1, player2) {
+    var response = atUser(player1) + getPlots();
+
+    if(player2 !== undefined) {
+        response = response + '. Opponent: ' + atUser(player2);
+    }
+    return response;
+}
+
+function atUser(user) {
+    return '@' + user;
+}
+
+function printPlotLog() {
+    console.log(JSON.stringify(plotLog, null, 4));
+}
+
+function reply(tweet) {
+
+    var firstMentioned;
+
+    _.find(tweet.entities.user_mentions, function(user) {
+        if (user.screen_name !== config.me) {
+            firstMentioned = user.screen_name;
         }
     });
+    
+    twitter.post('statuses/update', {
+        status: getTweetText(tweet.user.screen_name, firstMentioned),
+        in_reply_to_status_id: tweet.id_str
+    }, onTweet);
+
+    if (firstMentioned !== undefined) {
+        twitter.post('statuses/update', {
+            status: getTweetText(firstMentioned, tweet.user.screen_name)
+        }, onTweet);
+    }
+
+    printPlotLog();
 }
 
 // What to do after we retweet something.
-function onReTweet(err) {
+function onTweet(err, tweet, response) {
     if(err) {
-        console.error("retweeting failed :(");
+        console.error("tweet failed to send :(");
         console.error(err);
+    }
+    else {
+        console.log(tweet.text);
     }
 }
 
 // What to do when we get a tweet.
-function onTweet(tweet) {
+function triageTweet(tweet) {
     // Reject the tweet if:
-    //  1. it's flagged as a retweet
-    //  2. it's matches our regex rejection criteria
-    //  3. it doesn't match our regex acceptance filter
-    var regexReject = new RegExp(config.regexReject, 'i');
-    var regexFilter = new RegExp(config.regexFilter, 'i');
+    //  1. it's flagged as a retweet    
     if (tweet.retweeted) {
         return;
     }
-    if (regexReject.test(tweet.text)) {
-        return;
-    }
-    if (regexFilter.test(tweet.text)) {
-        console.log(tweet);
-        console.log("RT: " + tweet.text);
-        // Note we're using the id_str property since javascript is not accurate
-        // for 64bit ints.
-        tu.retweet({
-            id: tweet.id_str
-        }, onReTweet);
+    else {
+        // Send a tweet to the person that requested the plots
+        reply(tweet);
     }
 }
 
-// Function for listening to twitter streams and retweeting on demand.
-function listen(listMembers) {
-    tu.filter({
-        follow: listMembers
+// Function for listening to twitter streams for mentions.
+function startStream() {
+
+    twitter.stream('statuses/filter', {
+        track: config.me
     }, function(stream) {
-        console.log("listening to stream");
-        stream.on('tweet', onTweet);
+        console.log("listening to stream for " + config.me);
+        stream.on('data', triageTweet);
     });
 }
 
-// The application itself.
-// Use the tuiter node module to get access to twitter.
-var tu = require('tuiter')(config.keys);
+// An instance of underscore.
+var _ = require('underscore');
 
-// Run the application. The callback in getListMembers ensures we get our list
-// of twitter streams before we attempt to listen to them via the twitter API.
-getListMembers(listen);
+// The application itself.
+// Use the node-twitter (twitter) node module to get access to twitter.
+var twitter = require('twitter')(config.keys);
+
+// Run the application. 
+startStream();
