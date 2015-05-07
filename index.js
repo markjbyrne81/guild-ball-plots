@@ -121,12 +121,26 @@ function reply(tweet) {
 
     var playerPlots = getPlots(players);
 
+    // Loop each player in the playerPlots array and first attempt
+    // to send them a direct message containing their plots.  If that
+    // fails send them the plots in a tweet instead.
     for (var player in playerPlots) {
         if (playerPlots.hasOwnProperty(player)) {
-            twitter.post('statuses/update', {
-                status: '@' + player + playerPlots[player],
-                in_reply_to_status_id: tweet.id_str
-            }, onTweet);
+            twitter.post('direct_messages/new', {
+                screen_name: player,
+                text: playerPlots[player]
+            }, function (err, data, response) {
+                if(err) {
+                    console.error("direct message failed to send. Sending as tweet instead.");
+                    twitter.post('statuses/update', {
+                        status: '@' + player + playerPlots[player],
+                        in_reply_to_status_id: tweet.id_str
+                    }, onTweet);
+                }
+                else {
+                    console.log("Direct message sent to " + player + ": " + playerPlots[player]);
+                }
+            });
         }
     }
 }
@@ -138,7 +152,7 @@ function onTweet(err, tweet, response) {
         console.error(err);
     }
     else {
-        console.log(tweet.text);
+        console.log("tweet sent: " + tweet.text);
     }
 }
 
