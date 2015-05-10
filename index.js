@@ -18,9 +18,11 @@ var config = {
     },
 };
 
-// A hash containg the season 1 plots and a count of
-// how many times each has been selected. since last
-// restart
+/**
+ * A hash containg the season 1 plots and a count of
+ * how many times each has been selected. since last
+ * restart
+ */
 var plotLog = {
     'Vengeance': 0,
     'Man Marking': 0,
@@ -109,8 +111,9 @@ function printPlotLog() {
  * plots.  Finally, send a tweet to each player in the
  * players array to let them know what their plots are.
  */
-function reply(tweet) {
+function buildReply(tweet) {
 
+    // Build the array of players
     var players = [tweet.user.screen_name];
 
     _.find(tweet.entities.user_mentions, function(user) {
@@ -119,33 +122,35 @@ function reply(tweet) {
         }
     });
 
+    // Get the plots for the players.
     var playerPlots = getPlots(players);
+    var plotKeys = Object.keys(playerPlots);
 
-    // Loop each player in the playerPlots array and first attempt
-    // to send them a direct message containing their plots.  If that
-    // fails send them the plots in a tweet instead.
-    for (var player in playerPlots) {
-        if (playerPlots.hasOwnProperty(player)) {
-            twitter.post('direct_messages/new', {
-                screen_name: player,
-                text: playerPlots[player]
-            }, function (err, data, response) {
-                if(err) {
-                    console.error("direct message failed to send. Sending as tweet instead.");
-                    twitter.post('statuses/update', {
-                        status: '@' + player + playerPlots[player],
-                        in_reply_to_status_id: tweet.id_str
-                    }, onTweet);
-                }
-                else {
-                    console.log("Direct message sent to " + player + ": " + playerPlots[player]);
-                }
-            });
-        }
+    sendTweetOrDm(plotKeys[0], playerPlots, tweet);
+    if (plotKeys.length > 1) {
+        sendTweetOrDm(plotKeys[1], playerPlots, tweet);
     }
 }
 
-// What to do after we retweet something.
+function sendTweetOrDm(player, playerPlots, tweet) {
+    twitter.post('direct_messages/new', {
+        screen_name: player,
+        text: playerPlots[player]
+    }, function(err, data, response) {
+        if(err) {
+            console.log('DM failed, sending as tweet instead.');
+            twitter.post('statuses/update', {
+                status: '@' + player + playerPlots[player],
+                in_reply_to_status_id: tweet.id_str
+            }, onTweet);
+        }
+        else {
+            console.log('DM sent successfully to ' + player + '. Text: ' + playerPlots[player]);
+        }
+    });
+}
+
+// What to do after we tweet something.
 function onTweet(err, tweet, response) {
     if(err) {
         console.error("tweet failed to send :(");
@@ -165,7 +170,7 @@ function triageTweet(tweet) {
     }
     else {
         // Send a tweet to the person that requested the plots
-        reply(tweet);
+        buildReply(tweet);
         printPlotLog();
     }
 }
